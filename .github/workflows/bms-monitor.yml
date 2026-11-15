@@ -47,12 +47,8 @@ jobs:
       # ── 4. Run the monitor ───────────────────────────────────────────
       - name: Run BookMyShow Monitor
         env:
-          BMS_EMAIL_SENDER:        ${{ secrets.BMS_EMAIL_SENDER }}
-          BMS_EMAIL_RECIPIENTS:    ${{ secrets.BMS_EMAIL_RECIPIENTS }}
-          BMS_GMAIL_APP_PASSWORD:  ${{ secrets.BMS_GMAIL_APP_PASSWORD }}
-          BMS_NTFY_TOPIC_ALERT:    ${{ secrets.BMS_NTFY_TOPIC_ALERT }}
-          BMS_NTFY_TOPIC_HEARTBEAT: ${{ secrets.BMS_NTFY_TOPIC_HEARTBEAT }}
-          BMS_NTFY_TOKEN:          ${{ secrets.BMS_NTFY_TOKEN }}
+          BMS_NTFY_TOPIC_ALERT:    "bms-doomsday"
+          BMS_NTFY_TOPIC_HEARTBEAT: "bms-doomsday"
           BMS_STATE_FILE:          "state/state.json"
           BMS_TIMEZONE:            "Asia/Kolkata"
         run: python main.py
