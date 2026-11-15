@@ -131,19 +131,20 @@ def validate_response_date(
 # BOOKMYSHOW API
 # ============================================================
 
-def fetch_showtimes(target_date: str, venue_code: str) -> dict:
+def fetch_showtimes(target_date: str, venue_code: str, region_code: str = "HYD", region_slug: str = "hyderabad") -> dict:
     params = {
         "dateCode": target_date,
         "venueCode": venue_code,
-        "regionCode": config.REGION_CODE,
+        "regionCode": region_code,
+        "regionSlug": region_slug,
     }
-    print(f"Fetching {venue_code} / {target_date} from BookMyShow...")
+    print(f"Fetching {venue_code} ({region_code}) / {target_date} from BookMyShow...")
     data = fetch_json(
         target_url=config.API_URL,
         params=params,
         timeout=getattr(config, "REQUEST_TIMEOUT", 25),
     )
-    print(f"Received JSON for {venue_code} / {target_date}.")
+    print(f"Received JSON for {venue_code} ({region_code}) / {target_date}.")
     return data
 
 
@@ -335,6 +336,8 @@ def identify_shows(
                         "time": show.get("ShowTime", "Time not provided"),
                         "screen": show.get("ScreenName", "Screen not provided"),
                         "attributes": show.get("Attributes", ""),
+                        "region_code": target.get("region_code", "HYD"),
+                        "region_slug": target.get("region_slug", "hyderabad"),
                     })
     return identified
 
@@ -344,9 +347,9 @@ def identify_shows(
 # ============================================================
 
 def get_booking_url(show: dict) -> str:
+    slug = show.get("region_slug", getattr(config, "REGION_SLUG", "hyderabad"))
     return (
-        "https://in.bookmyshow.com/movies/"
-        f"{config.REGION_SLUG}/seat-layout/"
+        f"https://in.bookmyshow.com/movies/{slug}/seat-layout/"
         f"{show['event_code']}/{show['venue_code']}/"
         f"{show['session_id']}/{show['date']}"
     )
@@ -429,7 +432,10 @@ def main() -> None:
     if len(target_dates) != len(set(target_dates)):
         raise ValueError("target_dates contains duplicates.")
 
-    venue_codes = list(dict.fromkeys(t["venue_code"] for t in targets))
+    venue_scopes = list(dict.fromkeys(
+        (t["venue_code"], t.get("region_code", getattr(config, "REGION_CODE", "HYD")), t.get("region_slug", getattr(config, "REGION_SLUG", "hyderabad")))
+        for t in targets
+    ))
 
     print("\n" + "=" * 65)
     print(f"ACTIVE PROFILE : {config.ACTIVE_PROFILE}")
@@ -437,7 +443,7 @@ def main() -> None:
     print(f"LANGUAGE       : {profile['language']}")
     print(f"THEATRE CODES  : {config.active_theatres_for_alert}")
     print(f"TARGET DATES   : {target_dates}")
-    print(f"VENUES         : {venue_codes}")
+    print(f"VENUES / CITIES: {venue_scopes}")
     print("=" * 65)
 
     all_shows: list = []
@@ -448,15 +454,18 @@ def main() -> None:
     for target_date in target_dates:
         print(f"\n{'=' * 65}\nCHECKING DATE: {target_date}\n{'=' * 65}")
 
-        for venue_code in venue_codes:
-            scope_label = f"{venue_code} / {target_date}"
+        for venue_code, region_code, region_slug in venue_scopes:
+            scope_label = f"{venue_code} ({region_code}) / {target_date}"
             time.sleep(inter_delay)
 
             try:
-                data = fetch_showtimes(target_date, venue_code)
+                data = fetch_showtimes(target_date, venue_code, region_code=region_code, region_slug=region_slug)
                 matching_details = validate_response_date(data, target_date, venue_code)
 
-                venue_targets = [t for t in targets if t["venue_code"] == venue_code]
+                venue_targets = [
+                    t for t in targets
+                    if t["venue_code"] == venue_code and t.get("region_code", getattr(config, "REGION_CODE", "HYD")) == region_code
+                ]
                 scope_shows: list = []
                 for target in venue_targets:
                     found = identify_shows(matching_details, target_date, target, profile)
@@ -469,7 +478,7 @@ def main() -> None:
                         print_results(found)
                     scope_shows.extend(found)
 
-                successful_scopes.add((venue_code, target_date))
+                successful_scopes.add((f"{venue_code}_{region_code}", target_date))
                 all_shows.extend(scope_shows)
                 print(
                     f"SUCCESS: {scope_label} — "
@@ -478,51 +487,56 @@ def main() -> None:
 
             except Exception as exc:
                 failed_scopes.append({
-                    "venue_code": venue_code,
+                    "venue_code": f"{venue_code}_{region_code}",
                     "date": target_date,
                     "error": str(exc),
                 })
                 print(f"\nWARNING: {scope_label} failed — {exc}")
                 print("Previous state preserved. Continuing with other venues.")
 
-    # ── Dynamic City-Wide Discovery for New Theatres ───────────────────
+    # ── Dynamic City-Wide Discovery for New Theatres (HYD & VIZ) ───────
     if profile.get("check_all_hyderabad_theatres") and all_shows:
         known_event_codes = {s["event_code"] for s in all_shows if s.get("event_code")}
-        for event_code in known_event_codes:
-            for target_date in target_dates:
-                try:
-                    time.sleep(inter_delay)
-                    byevent_url = "https://in.bookmyshow.com/api/v3/mobile/showtimes/byevent"
-                    params = {
-                        "regionCode": config.REGION_CODE,
-                        "eventCode": event_code,
-                        "dateCode": target_date,
-                    }
-                    ev_data = fetch_json(byevent_url, params=params, timeout=getattr(config, "REQUEST_TIMEOUT", 25))
-                    for sd in ev_data.get("ShowDetails", []):
-                        if str(sd.get("Date", "")) != target_date:
-                            continue
-                        for venue in sd.get("Venues", []):
-                            v_code = venue.get("VenueCode")
-                            v_name = venue.get("VenueName", "New Theatre")
-                            for show in venue.get("ShowTimes", []):
-                                s_id = show.get("SessionId")
-                                if not s_id:
-                                    continue
-                                all_shows.append({
-                                    "target_id": f"theatre_{v_code.lower()}",
-                                    "theatre_name": v_name,
-                                    "venue_code": v_code,
-                                    "format_label": show.get("ScreenName") or show.get("Attributes") or "Standard",
-                                    "movie": movie_title,
-                                    "date": target_date,
-                                    "time": show.get("ShowTimeDisplay", ""),
-                                    "session_id": s_id,
-                                    "event_code": event_code,
-                                    "booking_url": f"https://in.bookmyshow.com/movies/{config.REGION_SLUG}/seat-layout/{event_code}/{v_code}/{s_id}/{target_date}",
-                                })
-                except Exception as exc:
-                    logging.getLogger("bms_monitor").debug("Dynamic discovery error: %s", exc)
+        active_regions = {t.get("region_code", getattr(config, "REGION_CODE", "HYD")) for t in targets}
+        for region_code in active_regions:
+            region_slug = "vizag" if region_code == "VIZ" else "hyderabad"
+            for event_code in known_event_codes:
+                for target_date in target_dates:
+                    try:
+                        time.sleep(inter_delay)
+                        byevent_url = "https://in.bookmyshow.com/api/v3/mobile/showtimes/byevent"
+                        params = {
+                            "regionCode": region_code,
+                            "eventCode": event_code,
+                            "dateCode": target_date,
+                        }
+                        ev_data = fetch_json(byevent_url, params=params, timeout=getattr(config, "REQUEST_TIMEOUT", 25))
+                        for sd in ev_data.get("ShowDetails", []):
+                            if str(sd.get("Date", "")) != target_date:
+                                continue
+                            for venue in sd.get("Venues", []):
+                                v_code = venue.get("VenueCode")
+                                v_name = venue.get("VenueName", "New Theatre")
+                                for show in venue.get("ShowTimes", []):
+                                    s_id = show.get("SessionId")
+                                    if not s_id:
+                                        continue
+                                    all_shows.append({
+                                        "target_id": f"theatre_{v_code.lower()}_{region_code.lower()}",
+                                        "theatre_name": f"{v_name} ({region_code})",
+                                        "venue_code": v_code,
+                                        "format_label": show.get("ScreenName") or show.get("Attributes") or "Standard",
+                                        "movie": movie_title,
+                                        "date": target_date,
+                                        "time": show.get("ShowTimeDisplay", ""),
+                                        "session_id": s_id,
+                                        "event_code": event_code,
+                                        "region_code": region_code,
+                                        "region_slug": region_slug,
+                                        "booking_url": f"https://in.bookmyshow.com/movies/{region_slug}/seat-layout/{event_code}/{v_code}/{s_id}/{target_date}",
+                                    })
+                    except Exception as exc:
+                        logging.getLogger("bms_monitor").debug("Dynamic discovery error: %s", exc)
 
     if not successful_scopes:
         details = "; ".join(

@@ -13,7 +13,12 @@ Only theatre codes in active_theatres_for_alert are monitored.
 
 ACTIVE_PROFILE = "REAL_DATA"
 
-active_theatres_for_alert = ["AC", "PCX", "ART", "AAA", "AMB"]
+active_theatres_for_alert = [
+    # Hyderabad
+    "AC", "PCX", "ART", "AAA", "AMB",
+    # Visakhapatnam (Vizag)
+    "VIZ_VARUN", "VIZ_JAGD", "VIZ_CMR", "VIZ_CHIT", "VIZ_MIRAJ"
+]
 
 REGION_CODE = "HYD"
 REGION_SLUG = "hyderabad"
@@ -76,56 +81,126 @@ REAL_DATA = {
 # ============================================================
 
 THEATRE_TARGETS = {
+    # ── Hyderabad ──────────────────────────────────────────────
     "AC": [
         {
             "target_id": "allu_dolby_cinema",
-            "theatre_name": "Allu Cinemas",
+            "theatre_name": "Allu Cinemas: Kokapet (HYD)",
             "venue_code": "ALUC",
             "format_label": "Dolby Cinema",
             "match_type": "DOLBY_CINEMA",
+            "region_code": "HYD",
+            "region_slug": "hyderabad",
         },
     ],
     "PCX": [
         {
             "target_id": "prasads_pcx",
-            "theatre_name": "Prasads Multiplex",
+            "theatre_name": "Prasads Multiplex (HYD)",
             "venue_code": "PRHN",
             "format_label": "PCX",
             "match_type": "PCX",
+            "region_code": "HYD",
+            "region_slug": "hyderabad",
         },
         {
             "target_id": "prasads_hdr_by_barco",
-            "theatre_name": "Prasads Multiplex",
+            "theatre_name": "Prasads Multiplex (HYD)",
             "venue_code": "PRHN",
             "format_label": "HDR by Barco",
             "match_type": "HDR_BY_BARCO",
+            "region_code": "HYD",
+            "region_slug": "hyderabad",
         },
     ],
     "ART": [
         {
             "target_id": "art_epiq",
-            "theatre_name": "ART Cinemas, Vanasthalipuram",
+            "theatre_name": "ART Cinemas, Vanasthalipuram (HYD)",
             "venue_code": "ACEV",
             "format_label": "EPIQ",
             "match_type": "EPIQ",
+            "region_code": "HYD",
+            "region_slug": "hyderabad",
         },
     ],
     "AAA": [
         {
             "target_id": "aaa_led",
-            "theatre_name": "AAA Cinemas, Ameerpet",
+            "theatre_name": "AAA Cinemas, Ameerpet (HYD)",
             "venue_code": "ACAS",
             "format_label": "LED",
             "match_type": "LED",
+            "region_code": "HYD",
+            "region_slug": "hyderabad",
         },
     ],
     "AMB": [
         {
             "target_id": "amb_cinemas",
-            "theatre_name": "AMB Cinemas: Gachibowli",
+            "theatre_name": "AMB Cinemas: Gachibowli (HYD)",
             "venue_code": "AMBC",
             "format_label": "Laser / Premium",
             "match_type": "ALL",
+            "region_code": "HYD",
+            "region_slug": "hyderabad",
+        },
+    ],
+
+    # ── Visakhapatnam (Vizag) ──────────────────────────────────
+    "VIZ_VARUN": [
+        {
+            "target_id": "inox_varun_beach",
+            "theatre_name": "INOX: Varun Beach, Beach Road (Vizag)",
+            "venue_code": "INVB",
+            "format_label": "Inox Varun Beach",
+            "match_type": "ALL",
+            "region_code": "VIZ",
+            "region_slug": "vizag",
+        },
+    ],
+    "VIZ_JAGD": [
+        {
+            "target_id": "jagadamba_complex",
+            "theatre_name": "Jagadamba Complex 4K Dolby Atmos (Vizag)",
+            "venue_code": "JGDM",
+            "format_label": "Jagadamba 4K Dolby Atmos",
+            "match_type": "ALL",
+            "region_code": "VIZ",
+            "region_slug": "vizag",
+        },
+    ],
+    "VIZ_CMR": [
+        {
+            "target_id": "inox_cmr_central",
+            "theatre_name": "INOX: CMR Central, Maddilapalem (Vizag)",
+            "venue_code": "INCM",
+            "format_label": "Inox CMR Central",
+            "match_type": "ALL",
+            "region_code": "VIZ",
+            "region_slug": "vizag",
+        },
+    ],
+    "VIZ_CHIT": [
+        {
+            "target_id": "inox_chitralaya",
+            "theatre_name": "INOX: Chitralaya Mall (Vizag)",
+            "venue_code": "INVC",
+            "format_label": "Inox Chitralaya",
+            "match_type": "ALL",
+            "region_code": "VIZ",
+            "region_slug": "vizag",
+        },
+    ],
+    "VIZ_MIRAJ": [
+        {
+            "target_id": "miraj_surya_central",
+            "theatre_name": "Miraj Cinemas: Surya Central (Vizag)",
+            "venue_code": "MBSJ",
+            "format_label": "Miraj Surya Central",
+            "match_type": "ALL",
+            "region_code": "VIZ",
+            "region_slug": "vizag",
         },
     ],
 }
