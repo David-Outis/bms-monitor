@@ -93,8 +93,11 @@ def validate_response_date(
     data: dict, target_date: str, venue_code: str | None = None
 ) -> list:
     show_details = data.get("ShowDetails")
-    if not isinstance(show_details, list) or not show_details:
-        raise RuntimeError("Invalid response: ShowDetails missing or empty.")
+    if not isinstance(show_details, list):
+        raise RuntimeError("Invalid response: ShowDetails missing or not a list.")
+
+    if not show_details:
+        return []
 
     matching = [
         d for d in show_details
