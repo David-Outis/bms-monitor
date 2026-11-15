@@ -277,6 +277,8 @@ def matches_target(
         if attributes and "epiq" not in attributes:
             return False
         return "epiq" in attributes or "epiq" in dimension or "epiq" in screen_name
+    if mt == "ALL":
+        return True
     if mt == "LED":
         return "led" in attributes.split()
     raise ValueError(f"Unknown match_type: {mt}")
@@ -482,6 +484,45 @@ def main() -> None:
                 })
                 print(f"\nWARNING: {scope_label} failed — {exc}")
                 print("Previous state preserved. Continuing with other venues.")
+
+    # ── Dynamic City-Wide Discovery for New Theatres ───────────────────
+    if profile.get("check_all_hyderabad_theatres") and all_shows:
+        known_event_codes = {s["event_code"] for s in all_shows if s.get("event_code")}
+        for event_code in known_event_codes:
+            for target_date in target_dates:
+                try:
+                    time.sleep(inter_delay)
+                    byevent_url = "https://in.bookmyshow.com/api/v3/mobile/showtimes/byevent"
+                    params = {
+                        "regionCode": config.REGION_CODE,
+                        "eventCode": event_code,
+                        "dateCode": target_date,
+                    }
+                    ev_data = fetch_json(byevent_url, params=params, timeout=getattr(config, "REQUEST_TIMEOUT", 25))
+                    for sd in ev_data.get("ShowDetails", []):
+                        if str(sd.get("Date", "")) != target_date:
+                            continue
+                        for venue in sd.get("Venues", []):
+                            v_code = venue.get("VenueCode")
+                            v_name = venue.get("VenueName", "New Theatre")
+                            for show in venue.get("ShowTimes", []):
+                                s_id = show.get("SessionId")
+                                if not s_id:
+                                    continue
+                                all_shows.append({
+                                    "target_id": f"theatre_{v_code.lower()}",
+                                    "theatre_name": v_name,
+                                    "venue_code": v_code,
+                                    "format_label": show.get("ScreenName") or show.get("Attributes") or "Standard",
+                                    "movie": movie_title,
+                                    "date": target_date,
+                                    "time": show.get("ShowTimeDisplay", ""),
+                                    "session_id": s_id,
+                                    "event_code": event_code,
+                                    "booking_url": f"https://in.bookmyshow.com/movies/{config.REGION_SLUG}/seat-layout/{event_code}/{v_code}/{s_id}/{target_date}",
+                                })
+                except Exception as exc:
+                    logging.getLogger("bms_monitor").debug("Dynamic discovery error: %s", exc)
 
     if not successful_scopes:
         details = "; ".join(

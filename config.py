@@ -13,7 +13,7 @@ Only theatre codes in active_theatres_for_alert are monitored.
 
 ACTIVE_PROFILE = "REAL_DATA"
 
-active_theatres_for_alert = ["AC", "PCX", "ART", "AAA"]
+active_theatres_for_alert = ["AC", "PCX", "ART", "AAA", "AMB"]
 
 REGION_CODE = "HYD"
 REGION_SLUG = "hyderabad"
@@ -66,7 +66,8 @@ REAL_DATA = {
     ],
     "language": "English",
     "language_aliases": ["English", "Eng", "EN"],
-    "target_dates": ["20261218", "20261219"],
+    "target_dates": ["20261217", "20261218", "20261219", "20261220", "20261221"],
+    "check_all_hyderabad_theatres": True,
 }
 
 
@@ -116,6 +117,15 @@ THEATRE_TARGETS = {
             "venue_code": "ACAS",
             "format_label": "LED",
             "match_type": "LED",
+        },
+    ],
+    "AMB": [
+        {
+            "target_id": "amb_cinemas",
+            "theatre_name": "AMB Cinemas: Gachibowli",
+            "venue_code": "AMBC",
+            "format_label": "Laser / Premium",
+            "match_type": "ALL",
         },
     ],
 }
