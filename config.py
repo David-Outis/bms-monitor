@@ -11,7 +11,7 @@ Only theatre codes in active_theatres_for_alert are monitored.
 # GENERAL SETTINGS
 # ============================================================
 
-ACTIVE_PROFILE = "SANITY_TEST"
+ACTIVE_PROFILE = "REAL_DATA"
 
 active_theatres_for_alert = ["AC", "PCX", "ART", "AAA"]
 
