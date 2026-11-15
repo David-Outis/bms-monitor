@@ -1,16 +1,10 @@
 """
 BookMyShow premium-screen monitor.
 
-What it does each run:
-  1. Fetches showtime JSON for every configured venue/date.
-  2. Identifies sessions matching the active movie, language & screen format.
-  3. Diffs against the persistent archive in state.json.
-  4. If NEW / REAPPEARED / UPDATED sessions found → send ntfy alert (persistent,
-     high-priority) + Gmail email.
-  5. If tickets are CURRENTLY LIVE → always resend ntfy alert (persistent) so
-     the notification stays on-screen until you manually dismiss it.
-  6. Every HEARTBEAT_INTERVAL_SECONDS → send a quiet ntfy ping so you know
-     the monitor is still running.
+Notifications:
+  - ntfy.sh (topic: bms-doomsday)
+  - Persistent alert while tickets are live
+  - Periodic heartbeat ping
 """
 
 from __future__ import annotations
@@ -21,7 +15,6 @@ import os
 import re
 import time
 import unicodedata
-import html
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -35,14 +28,9 @@ from fetcher import fetch_json
 from notifier import (
     notify_heartbeat,
     notify_tickets_found,
-    send_success_email,
 )
 from state_store import MonitorState
 
-
-# ---------------------------------------------------------------------------
-# Bootstrap
-# ---------------------------------------------------------------------------
 ENV_FILE = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=ENV_FILE)
 
@@ -58,7 +46,6 @@ logger = logging.getLogger("bms_monitor")
 # ============================================================
 
 def get_active_profile() -> dict:
-    """Return the selected movie profile dict from config.py."""
     name = config.ACTIVE_PROFILE.strip().upper()
     if name not in {"SANITY_TEST", "REAL_DATA"}:
         raise ValueError('ACTIVE_PROFILE must be "SANITY_TEST" or "REAL_DATA".')
@@ -73,7 +60,6 @@ def get_active_profile() -> dict:
 
 
 def get_active_targets() -> list:
-    """Expand active theatre codes into their screen targets."""
     codes = config.active_theatres_for_alert
     if not isinstance(codes, list) or not codes:
         raise ValueError("active_theatres_for_alert must be a non-empty list.")
@@ -105,10 +91,6 @@ def validate_date_format(date_code: str) -> bool:
 def validate_response_date(
     data: dict, target_date: str, venue_code: str | None = None
 ) -> list:
-    """
-    Return ShowDetails entries matching target_date.
-    Raises RuntimeError on date/venue mismatch or missing Event list.
-    """
     show_details = data.get("ShowDetails")
     if not isinstance(show_details, list) or not show_details:
         raise RuntimeError("Invalid response: ShowDetails missing or empty.")
@@ -120,10 +102,11 @@ def validate_response_date(
 
     if not matching:
         returned = [d.get("Date") for d in show_details if isinstance(d, dict)]
-        raise RuntimeError(
-            f"Date mismatch. Requested {target_date}, "
-            f"response had {returned}. Rejecting fallback data."
+        print(
+            f"Note: Date {target_date} not yet scheduled at {venue_code or 'venue'} "
+            f"(active dates on BMS: {returned})."
         )
+        return []
 
     for detail in matching:
         if not isinstance(detail.get("Event"), list):
@@ -148,7 +131,6 @@ def validate_response_date(
 # ============================================================
 
 def fetch_showtimes(target_date: str, venue_code: str) -> dict:
-    """Fetch one venue/date and return raw BMS JSON."""
     params = {
         "dateCode": target_date,
         "venueCode": venue_code,
@@ -327,93 +309,6 @@ def print_results(shows: list) -> None:
 
 
 # ============================================================
-# EMAIL BODY BUILDERS
-# ============================================================
-
-def group_shows(shows: list) -> dict:
-    grouped: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    for show in shows:
-        screen_key = f"{show['screen']} ({show['format_label']})"
-        grouped[show["theatre_name"]][show["date"]][screen_key].append(show)
-    return grouped
-
-
-def build_email_body(shows: list, movie_title: str) -> str:
-    grouped = group_shows(shows)
-    lines = [
-        f"🚨 BOOKMYSHOW ALERT: {movie_title}",
-        f"FOUND {len(shows)} SESSION(S) ACROSS {len(grouped)} THEATRE(S).",
-        "", "Matching sessions:", "",
-    ]
-    for theatre in sorted(grouped):
-        lines += ["=" * 58, f"THEATRE: {theatre}", "=" * 58]
-        for date_code in sorted(grouped[theatre]):
-            try:
-                fmt_date = datetime.strptime(date_code, "%Y%m%d").strftime("%d %b %Y")
-            except ValueError:
-                fmt_date = date_code
-            lines += ["", f"DATE: {fmt_date}"]
-            for screen in sorted(grouped[theatre][date_code]):
-                lines += ["", f"  SCREEN: {screen}"]
-                for show in sorted(
-                    grouped[theatre][date_code][screen], key=lambda s: str(s["time"])
-                ):
-                    lines += [
-                        f"    Movie: {show['movie']}",
-                        f"    Language: {show['language']}",
-                        f"    Format: {show['dimension'] or show['format_label']}",
-                        f"    Showtime: {show['time']}",
-                        f"    Link: {get_booking_url(show)}",
-                        "",
-                    ]
-    lines += [
-        "-" * 58,
-        "Automated BookMyShow alert. Open link to verify availability.",
-    ]
-    return "\n".join(lines)
-
-
-def build_email_html(shows: list, movie_title: str) -> str:
-    grouped = group_shows(shows)
-    parts = [
-        "<html><body>",
-        f"<h2>🚨 BOOKMYSHOW ALERT: {html.escape(movie_title)}</h2>",
-        f"<p><strong>Found {len(shows)} session(s) across {len(grouped)} theatre(s).</strong></p>",
-    ]
-    for theatre in sorted(grouped):
-        parts.append(f"<h2>{html.escape(theatre)}</h2>")
-        for date_code in sorted(grouped[theatre]):
-            try:
-                fmt_date = datetime.strptime(date_code, "%Y%m%d").strftime("%d %b %Y")
-            except ValueError:
-                fmt_date = date_code
-            parts.append(f"<h3>{html.escape(fmt_date)}</h3>")
-            for screen in sorted(grouped[theatre][date_code]):
-                parts.append(f"<h4>{html.escape(screen)}</h4><ul>")
-                for show in sorted(
-                    grouped[theatre][date_code][screen], key=lambda s: str(s["time"])
-                ):
-                    url = html.escape(get_booking_url(show), quote=True)
-                    parts.append(
-                        "<li>"
-                        f"<strong>{html.escape(str(show['time']))}</strong>"
-                        f" — {html.escape(str(show['movie']))}"
-                        f" ({html.escape(str(show['language']))})"
-                        f" — {html.escape(str(show['dimension']))}"
-                        f' — <a href="{url}">BookMyShow seat layout</a>'
-                        "</li>"
-                    )
-                parts.append("</ul>")
-    parts += [
-        "<hr>",
-        "<p>Automated BookMyShow alert.</p>",
-        "<p>Open link to verify seat availability.</p>",
-        "</body></html>",
-    ]
-    return "\n".join(parts)
-
-
-# ============================================================
 # PROFILE STATE KEY
 # ============================================================
 
@@ -435,11 +330,9 @@ def _should_send_heartbeat(
     profile_key: str,
     now: datetime,
 ) -> bool:
-    """Return True if HEARTBEAT_INTERVAL_SECONDS has elapsed since last heartbeat.
-    If interval is 0 (default), always send on every run."""
-    interval = getattr(config, "HEARTBEAT_INTERVAL_SECONDS", 0)
+    interval = getattr(config, "HEARTBEAT_INTERVAL_SECONDS", 21600)
     if interval <= 0:
-        return True  # Send every run
+        return True
     last_raw = state.get_last_heartbeat(profile_key)
     if not last_raw:
         return True
@@ -484,7 +377,6 @@ def main() -> None:
     print(f"VENUES         : {venue_codes}")
     print("=" * 65)
 
-    # ── Fetch & identify ──────────────────────────────────────────────
     all_shows: list = []
     successful_scopes: set = set()
     failed_scopes: list = []
@@ -495,8 +387,6 @@ def main() -> None:
 
         for venue_code in venue_codes:
             scope_label = f"{venue_code} / {target_date}"
-
-            # Polite inter-request delay
             time.sleep(inter_delay)
 
             try:
@@ -523,7 +413,7 @@ def main() -> None:
                     f"{len(scope_shows)} matching session(s)."
                 )
 
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 failed_scopes.append({
                     "venue_code": venue_code,
                     "date": target_date,
@@ -532,7 +422,6 @@ def main() -> None:
                 print(f"\nWARNING: {scope_label} failed — {exc}")
                 print("Previous state preserved. Continuing with other venues.")
 
-    # ── Abort if everything failed ────────────────────────────────────
     if not successful_scopes:
         details = "; ".join(
             f"{i['venue_code']}/{i['date']}: {i['error']}"
@@ -542,7 +431,6 @@ def main() -> None:
             f"All scopes failed. State not modified. Failures: {details}"
         )
 
-    # ── Deduplicate ───────────────────────────────────────────────────
     unique_shows: list = []
     seen: set = set()
     for show in all_shows:
@@ -562,15 +450,12 @@ def main() -> None:
         for item in failed_scopes:
             print(f"  - {item['venue_code']}/{item['date']}: {item['error']}")
 
-    # ── Timestamps ────────────────────────────────────────────────────
     tz_name = os.getenv("BMS_TIMEZONE", "Asia/Kolkata")
     try:
         now = datetime.now(ZoneInfo(tz_name))
     except (ZoneInfoNotFoundError, KeyError):
-        # tzdata package not installed (common on Windows without it)
         now = datetime.now()
 
-    # ── Persistent state ──────────────────────────────────────────────
     state_file = Path(os.getenv("BMS_STATE_FILE", "state/state.json"))
     state = MonitorState(state_file)
     profile_key = _profile_state_key(profile, targets)
@@ -586,7 +471,6 @@ def main() -> None:
     print(f"Archived sessions       : {len(result['archive'])}")
     print(f"Pending change events   : {len(result['pending_changes'])}")
 
-    # ── Active date filter for email/ntfy bodies ──────────────────────
     active_dates = {str(d) for d in target_dates}
     current_shows = sorted(
         [
@@ -602,6 +486,10 @@ def main() -> None:
         ),
     )
 
+    # Attach booking URLs
+    for show in current_shows:
+        show["booking_url"] = get_booking_url(show)
+
     # ── Heartbeat ntfy (every HEARTBEAT_INTERVAL_SECONDS) ────────────
     if _should_send_heartbeat(state, profile_key, now):
         run_summary = (
@@ -613,57 +501,32 @@ def main() -> None:
                 if failed_scopes else "All scopes healthy."
             )
         )
-        print("\nSending heartbeat ntfy...")
+        print("\nSending heartbeat ntfy to bms-doomsday...")
         notify_heartbeat(movie_title, run_summary)
         state.record_heartbeat(profile_key, now)
 
     # ── Ticket-found alerts ───────────────────────────────────────────
-    # Attach booking URLs to each show so notifier can include them.
-    for show in current_shows:
-        show["booking_url"] = get_booking_url(show)
-
-    # Case A: New / reappeared / updated sessions → send change alert
     if result["pending_changes"]:
         print(
             f"\nChanges detected: {len(result['pending_changes'])} event(s). "
-            "Sending alert..."
+            "Sending alert to bms-doomsday..."
         )
         notify_tickets_found(current_shows, movie_title)
-        try:
-            send_success_email(
-                current_shows,
-                movie_title,
-                get_booking_url,
-                build_email_body,
-                build_email_html,
-            )
-        except Exception as exc:  # noqa: BLE001
-            print(f"Email delivery failed (ntfy alert still sent): {exc}")
-        else:
-            state.clear_pending_changes(profile_key)
-            print("Pending changes cleared after successful email delivery.")
+        state.clear_pending_changes(profile_key)
+        print("Pending changes cleared after alert dispatch.")
 
-    # Case B: No new changes but tickets are STILL LIVE
-    # → resend persistent ntfy every run so phone notification stays visible.
     elif current_shows:
         print(
             f"\n{len(current_shows)} session(s) still live. "
-            "Re-pinging ntfy so alert stays on-screen..."
+            "Re-pinging ntfy bms-doomsday so alert stays on-screen..."
         )
         notify_tickets_found(current_shows, movie_title)
 
-    # Case C: Nothing live, nothing changed.
     else:
         print("\nNo matching sessions live. No notification sent.")
 
 
-# ============================================================
-# ENTRY POINT
-# ============================================================
-
 if __name__ == "__main__":
-    import smtplib
-
     try:
         main()
     except requests.exceptions.HTTPError as exc:
@@ -675,6 +538,6 @@ if __name__ == "__main__":
     except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
         print(f"\nConfiguration/data error: {exc}")
         raise SystemExit(1)
-    except (smtplib.SMTPException, OSError) as exc:
-        print(f"\nEmail/state error: {exc}")
+    except OSError as exc:
+        print(f"\nState/IO error: {exc}")
         raise SystemExit(1)
