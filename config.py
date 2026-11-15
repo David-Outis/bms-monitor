@@ -57,8 +57,15 @@ REAL_DATA = {
     "movie_aliases": [
         "Avengers Doomsday",
         "Avengers: Doomsday",
+        "Avengers Dooms Day",
+        "Avengers: Dooms Day",
+        "Avengers - Doomsday",
+        "Avengers 5",
+        "Avengers 5: Doomsday",
+        "Doomsday",
     ],
     "language": "English",
+    "language_aliases": ["English", "Eng", "EN"],
     "target_dates": ["20261218", "20261219"],
 }
 

@@ -9,6 +9,7 @@ Notifications:
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import os
@@ -158,6 +159,10 @@ def normalize(value) -> str:
 
 
 def movie_matches(parent_event: dict, child_event: dict, profile: dict) -> bool:
+    """
+    Check if event matches target movie with exact, alias, token-overlap,
+    and fuzzy near-matching.
+    """
     titles = [profile["movie_title"], *profile.get("movie_aliases", [])]
     candidates = [
         normalize(c)
@@ -167,26 +172,82 @@ def movie_matches(parent_event: dict, child_event: dict, profile: dict) -> bool:
         ]
         if c
     ]
-    return any(
-        normalize(t) in cand
-        for t in titles
-        for cand in candidates
-        if normalize(t)
-    )
-
-
-def language_matches(child_event: dict, configured_language: str) -> bool:
-    expected = normalize(configured_language)
-    if not expected:
+    if not candidates:
         return False
-    return any(
-        expected in normalize(c)
-        for c in [
-            child_event.get("EventLanguage", ""),
-            child_event.get("EventName", ""),
-        ]
-        if c
-    )
+
+    # 1. Exact or Substring match on configured title / aliases
+    for t in titles:
+        norm_t = normalize(t)
+        if not norm_t:
+            continue
+        for cand in candidates:
+            if norm_t in cand or cand in norm_t:
+                return True
+
+    # 2. Token overlap & spacing variations (e.g. "Dooms Day" vs "Doomsday", "Avengers 5")
+    for cand in candidates:
+        cand_words = set(cand.split())
+        cand_text_no_space = cand.replace(" ", "")
+
+        has_avengers = any("avenger" in w for w in cand_words) or "avenger" in cand_text_no_space
+        has_doomsday = (
+            any("doom" in w for w in cand_words)
+            or "doomsday" in cand_text_no_space
+            or "dooms" in cand_words
+        )
+        if has_avengers and has_doomsday:
+            return True
+
+        # 3. Fuzzy near-matching via SequenceMatcher (similarity >= 0.75 or sliding window >= 0.80)
+        for t in titles:
+            norm_t = normalize(t)
+            if not norm_t:
+                continue
+            if difflib.SequenceMatcher(None, norm_t, cand).ratio() >= 0.75:
+                return True
+            cand_tokens = cand.split()
+            target_token_count = len(norm_t.split())
+            if len(cand_tokens) >= target_token_count:
+                for i in range(len(cand_tokens) - target_token_count + 1):
+                    window = " ".join(cand_tokens[i:i + target_token_count])
+                    if difflib.SequenceMatcher(None, norm_t, window).ratio() >= 0.80:
+                        return True
+
+    return False
+
+
+def language_matches(child_event: dict, configured_language: str, profile: dict | None = None) -> bool:
+    """
+    Check if event matches target language, handling variations like English, Eng, EN,
+    and occurrences in EventLanguage or EventName (e.g. '(Eng)', '(English)').
+    """
+    target_langs = {normalize(configured_language)}
+    if profile:
+        target_langs.update(normalize(a) for a in profile.get("language_aliases", []) if a)
+
+    norm_expected = normalize(configured_language)
+    if "english" in norm_expected:
+        target_langs.update(["english", "eng", "en"])
+    elif "telugu" in norm_expected:
+        target_langs.update(["telugu", "tel"])
+    elif "hindi" in norm_expected:
+        target_langs.update(["hindi", "hin"])
+
+    # 1. Check EventLanguage field explicitly
+    raw_event_lang = normalize(child_event.get("EventLanguage", ""))
+    if raw_event_lang:
+        event_lang_words = set(raw_event_lang.split())
+        if any(tl in event_lang_words or tl == raw_event_lang for tl in target_langs):
+            return True
+
+    # 2. Check EventName tokens (e.g. "Avengers (Eng)", "Avengers (English)")
+    raw_event_name = normalize(child_event.get("EventName", ""))
+    if raw_event_name:
+        name_words = set(raw_event_name.split())
+        if any(tl in name_words for tl in target_langs):
+            return True
+
+    return False
 
 
 # ============================================================
@@ -238,7 +299,7 @@ def identify_shows(
                     continue
                 if not movie_matches(parent_event, child_event, profile):
                     continue
-                if not language_matches(child_event, profile["language"]):
+                if not language_matches(child_event, profile["language"], profile):
                     continue
                 for show in child_event.get("ShowTimes", []):
                     if not isinstance(show, dict):
