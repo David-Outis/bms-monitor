@@ -4,7 +4,18 @@ ACTIVE_PROFILE:
     SANITY_TEST -> Ramayana / Telugu
     REAL_DATA   -> Avengers: Doomsday / English
 
-Only theatre codes in active_theatres_for_alert are monitored.
+Strictly monitored theatres:
+    Hyderabad:
+        - Allu Cinemas: Kokapet (Dolby Cinema)
+        - Prasads Multiplex (PCX & HDR by Barco)
+        - ART Cinemas: Vanasthalipuram (EPIQ)
+        - AAA Cinemas: Ameerpet (LED)
+    Visakhapatnam:
+        - Jagadamba Complex (4K Dolby Atmos)
+        - Sri Melody (HDR Dolby Atmos)
+        - Sangam Theatre (4K Dolby Atmos)
+        - Sarat Theatre (4K Laser Dolby Atmos)
+        - AAA Movies Vizag (Dolby Atmos / 4K)
 """
 
 # ============================================================
@@ -14,10 +25,10 @@ Only theatre codes in active_theatres_for_alert are monitored.
 ACTIVE_PROFILE = "REAL_DATA"
 
 active_theatres_for_alert = [
-    # Hyderabad
-    "AC", "PCX", "ART", "AAA", "AMB",
-    # Visakhapatnam (Vizag)
-    "VIZ_VARUN", "VIZ_JAGD", "VIZ_CMR", "VIZ_CHIT", "VIZ_MIRAJ"
+    # Hyderabad (strictly the 4 original theatres)
+    "AC", "PCX", "ART", "AAA",
+    # Visakhapatnam (strictly the 5 requested theatres)
+    "VIZ_JAGD", "VIZ_MELD", "VIZ_SNGM", "VIZ_SRTR", "VIZ_AAA"
 ]
 
 REGION_CODE = "HYD"
@@ -72,7 +83,7 @@ REAL_DATA = {
     "language": "English",
     "language_aliases": ["English", "Eng", "EN"],
     "target_dates": ["20261217", "20261218", "20261219", "20261220", "20261221"],
-    "check_all_hyderabad_theatres": True,
+    "check_all_hyderabad_theatres": False,
 }
 
 
@@ -135,69 +146,58 @@ THEATRE_TARGETS = {
             "region_slug": "hyderabad",
         },
     ],
-    "AMB": [
-        {
-            "target_id": "amb_cinemas",
-            "theatre_name": "AMB Cinemas: Gachibowli (HYD)",
-            "venue_code": "AMBC",
-            "format_label": "Laser / Premium",
-            "match_type": "ALL",
-            "region_code": "HYD",
-            "region_slug": "hyderabad",
-        },
-    ],
 
     # ── Visakhapatnam (Vizag) ──────────────────────────────────
-    "VIZ_VARUN": [
-        {
-            "target_id": "inox_varun_beach",
-            "theatre_name": "INOX: Varun Beach, Beach Road (Vizag)",
-            "venue_code": "INVB",
-            "format_label": "Inox Varun Beach",
-            "match_type": "ALL",
-            "region_code": "VIZ",
-            "region_slug": "vizag",
-        },
-    ],
     "VIZ_JAGD": [
         {
             "target_id": "jagadamba_complex",
-            "theatre_name": "Jagadamba Complex 4K Dolby Atmos (Vizag)",
+            "theatre_name": "Jagadamba Complex (Vizag)",
             "venue_code": "JGDM",
-            "format_label": "Jagadamba 4K Dolby Atmos",
+            "format_label": "4K Dolby Atmos",
             "match_type": "ALL",
             "region_code": "VIZ",
             "region_slug": "vizag",
         },
     ],
-    "VIZ_CMR": [
+    "VIZ_MELD": [
         {
-            "target_id": "inox_cmr_central",
-            "theatre_name": "INOX: CMR Central, Maddilapalem (Vizag)",
-            "venue_code": "INCM",
-            "format_label": "Inox CMR Central",
+            "target_id": "melody_theatre",
+            "theatre_name": "Sri Melody Theatre (Vizag)",
+            "venue_code": "MELD",
+            "format_label": "HDR Dolby Atmos",
             "match_type": "ALL",
             "region_code": "VIZ",
             "region_slug": "vizag",
         },
     ],
-    "VIZ_CHIT": [
+    "VIZ_SNGM": [
         {
-            "target_id": "inox_chitralaya",
-            "theatre_name": "INOX: Chitralaya Mall (Vizag)",
-            "venue_code": "INVC",
-            "format_label": "Inox Chitralaya",
+            "target_id": "sangam_theatre",
+            "theatre_name": "Sangam Theatre (Vizag)",
+            "venue_code": "JTYS",
+            "format_label": "4K Dolby Atmos",
             "match_type": "ALL",
             "region_code": "VIZ",
             "region_slug": "vizag",
         },
     ],
-    "VIZ_MIRAJ": [
+    "VIZ_SRTR": [
         {
-            "target_id": "miraj_surya_central",
-            "theatre_name": "Miraj Cinemas: Surya Central (Vizag)",
-            "venue_code": "MBSJ",
-            "format_label": "Miraj Surya Central",
+            "target_id": "sarat_theatre",
+            "theatre_name": "Sarat Theatre (Vizag)",
+            "venue_code": "STTR",
+            "format_label": "4K Laser Dolby Atmos",
+            "match_type": "ALL",
+            "region_code": "VIZ",
+            "region_slug": "vizag",
+        },
+    ],
+    "VIZ_AAA": [
+        {
+            "target_id": "aaa_movies_vizag",
+            "theatre_name": "AAA Movies (Vizag)",
+            "venue_code": "ACAS",
+            "format_label": "Dolby Atmos / 4K",
             "match_type": "ALL",
             "region_code": "VIZ",
             "region_slug": "vizag",
